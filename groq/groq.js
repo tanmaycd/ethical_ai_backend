@@ -41,6 +41,72 @@ async function verifyDocumentType(base64Image) {
   }
 }
 
+async function getGroqChatResponse({ message, chatHistory, scoreData, schemeId }) {
+  const context = `
+    You are an AI Government Scheme Readiness Advisor. 
+    The user is applying for the scheme: ${schemeId}.
+    Current Rule-Based Score: ${scoreData.score}/100.
+    Current Issues: ${JSON.stringify(scoreData.issues)}.
+    Current Data: ${JSON.stringify(scoreData.userData)}.
+
+    Instructions:
+    1. Be conversational and helpful.
+    2. If the user provides new info (like age or income), acknowledge it.
+    3. Explain their readiness and what documents or eligibility criteria they are missing.
+    4. If they upload a document, tell them if it's verified or not.
+    
+    Format your response in structured JSON:
+    {
+      "reply": "Your conversational message to the user",
+      "summary": "Brief summary of status",
+      "risks": ["risk 1", "risk 2"],
+      "improvements": ["step 1", "step 2"],
+      "eligibilityStatus": "Low/Medium/High",
+      "extractedData": {
+        "age": "number or null",
+        "income": "number or null",
+        "occupation": "string or null",
+        "location": "string or null"
+      }
+    }
+  `;
+
+  try {
+    const messages = [
+      { role: "system", content: context },
+      ...(chatHistory || []).map(m => ({ role: m.role, content: m.content })),
+      { role: "user", content: message || "Can you check my readiness for this scheme?" }
+    ];
+
+    const res = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.3-70b-versatile",
+        messages,
+        response_format: { type: "json_object" },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const content = res.data.choices[0]?.message?.content;
+    return JSON.parse(content);
+  } catch (error) {
+    console.error("Groq Chat Error:", error.message);
+    return {
+      reply: "I'm having trouble connecting. Can you please try again?",
+      summary: "Error in AI processing.",
+      risks: [],
+      improvements: [],
+      eligibilityStatus: "Unknown"
+    };
+  }
+}
+
 async function getGroqResponse(scoreData) {
   const prompt = `
   User Data: ${JSON.stringify(scoreData.userData)}
@@ -86,4 +152,4 @@ async function getGroqResponse(scoreData) {
   }
 }
 
-module.exports = { getGroqResponse, verifyDocumentType };
+module.exports = { getGroqResponse, verifyDocumentType, getGroqChatResponse };

@@ -12,4 +12,4 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.use("/check", checkRoute);
 
-app.listen(3000, () => console.log("Server running"));
+app.listen(5000, () => console.log("Server running"));
